@@ -7,6 +7,29 @@ const client = axios.create({
 
 const validRatios = ["1:1", "16:9", "3:2", "2:3", "4:5", "5:4", "9:16", "3:4", "4:3", "custom"];
 
+async function uploadToImgbb(buffer) {
+  const formData = new FormData();
+  formData.append('source', buffer, { filename: `image-${Date.now()}.jpg` });
+  formData.append('type', 'file');
+  formData.append('action', 'upload');
+
+  const config = {
+    method: 'POST',
+    url: 'https://imgbb.com/json',
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+      'Referer': 'https://imgbb.com/',
+      'Origin': 'https://imgbb.com',
+      ...formData.getHeaders()
+    },
+    data: formData
+  };
+
+  const { data: response } = await axios.request(config);
+  return response.image.url;
+}
+
 let handler = async (m, { conn, text }) => {
   if (!text) return m.reply("النص الي هنفذو\nمثال: .صوره-تعديل اجعل لون البشرة اسود|1:1");
   if (!m.quoted || !m.quoted.mimetype || !m.quoted.mimetype.includes('image')) {
@@ -20,15 +43,18 @@ let handler = async (m, { conn, text }) => {
     if (!prompt) prompt = text;
 
     const buffer = await m.quoted.download();
+    const imageUrl = await uploadToImgbb(buffer);
     
-    const formData = new FormData();
-    formData.append('image', buffer, 'image.jpg');
-    formData.append('prompt', prompt);
-    if (size && validRatios.includes(size)) formData.append('size', size); 
+    const payload = {
+      prompt: prompt,
+      image: [imageUrl]
+    };
+    
+    if (size && validRatios.includes(size)) payload.size = size;
 
-    const createRes = await client.post('/process-image', formData, {
+    const createRes = await client.post('/process-image', payload, {
       headers: {
-        ...formData.getHeaders()
+        'Content-Type': 'application/json'
       }
     });
 
